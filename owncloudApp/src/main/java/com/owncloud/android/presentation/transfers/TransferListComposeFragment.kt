@@ -1,5 +1,7 @@
 package com.owncloud.android.presentation.transfers
 
+import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -22,15 +24,20 @@ import androidx.compose.material.Divider
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.LinearProgressIndicator
-import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -38,14 +45,39 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import com.owncloud.android.R
+import com.owncloud.android.domain.files.model.OCFile
+import com.owncloud.android.domain.spaces.model.OCSpace
+import com.owncloud.android.domain.transfers.model.OCTransfer
+import com.owncloud.android.domain.transfers.model.TransferStatus
+import com.owncloud.android.utils.DisplayUtils
+import org.koin.androidx.viewmodel.ext.android.viewModel
+import kotlinx.coroutines.flow.collectLatest
+import java.io.File
+import android.text.format.DateUtils
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.currentCompositionLocalContext
+import androidx.core.content.ContentProviderCompat.requireContext
+import androidx.documentfile.provider.DocumentFile
+import com.andrognito.patternlockview.utils.ResourceUtils.getString
+import com.google.android.material.snackbar.Snackbar
+import com.owncloud.android.domain.transfers.model.TransferResult
+import com.owncloud.android.extensions.statusToStringRes
+import com.owncloud.android.lib.common.OwnCloudAccount
+import com.owncloud.android.presentation.authentication.AccountUtils
+import com.owncloud.android.ui.activity.FileActivity
+import com.owncloud.android.utils.MimetypeIconUtil
+import timber.log.Timber
 
 class TransferListComposeFragment : Fragment() {
+
+    private val transfersViewModel by viewModel<TransfersViewModel>()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -53,33 +85,68 @@ class TransferListComposeFragment : Fragment() {
     ): View? {
         return ComposeView(requireContext()).apply {
             setContent {
-                Column {
-                    UploadGroup()
-                    TransferList()
-                }
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                Transfers(transfersViewModel = transfersViewModel)
             }
         }
     }
 }
 
 @Composable
-fun TransferList(modifier: Modifier = Modifier){
+fun Transfers(modifier: Modifier = Modifier, transfersViewModel: TransfersViewModel){
+    var transfersState by remember { mutableStateOf(emptyList<Pair<OCTransfer,OCSpace?>>()) }
 
+    LaunchedEffect(transfersViewModel){
+        transfersViewModel.transfersWithSpaceStateFlow.collectLatest { transfers ->
+            transfersState = transfers
+        }
+    }
+
+    // Se comprueba si existen transfers.
+    // NO -> Se muestra la lista vacía con la información correspondiente
+    // SI -> Se muestra la lista con la información de cada transfer
+
+    if (transfersState.isEmpty()) {
+        EmptyList()
+    } else {
+        TransferList(transfersWithSpace = transfersState, transfersViewModel = transfersViewModel)
+    }
+}
+@Composable
+fun TransferList(modifier: Modifier = Modifier, transfersWithSpace: List<Pair<OCTransfer,OCSpace?>>, transfersViewModel: TransfersViewModel){
+    val transfersGroupedByStatus = transfersWithSpace.groupBy { it.first.status }
     LazyColumn{
-        item { TransferItem() }
-        item { TransferItem() }
-        item { TransferItem() }
+        transfersGroupedByStatus.forEach{ (status, transfers) ->
+            item {
+                UploadGroup(status = status, count = transfers.size, transfersViewModel = transfersViewModel)
+            }
+            transfers.sortedByDescending { it.first.transferEndTimestamp ?: it.first.id }
+                .forEach { (transfer, space) ->
+                    item {
+                        TransferItem(transfer = transfer, space = space, transfersViewModel = transfersViewModel)
+                    }
+                }
+        }
     }
 }
 
 
 @Composable
-fun TransferItem(modifier: Modifier = Modifier){
+fun TransferItem(modifier: Modifier = Modifier, transfer: OCTransfer, space: OCSpace?, transfersViewModel: TransfersViewModel){
+    val remoteFile = File(transfer.remotePath)
+    var fileName = remoteFile.name
+    if (fileName.isEmpty()) {
+        fileName = File.separator
+    }
+
+    val isClickable = transfer.status == TransferStatus.TRANSFER_FAILED
+
     Row (
         modifier = Modifier
             .layoutId("LisItemLayout")
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 8.dp),
+            .padding(top = 8.dp, bottom = 8.dp)
+            .clickable(enabled = isClickable) { },
         verticalAlignment = Alignment.CenterVertically
     ){
         Box (
@@ -92,8 +159,9 @@ fun TransferItem(modifier: Modifier = Modifier){
                 .layoutId("Thumbnail")
                 .width(32.dp)
                 .height(32.dp),
-                painter = painterResource(id = R.drawable.ic_menu_archive),
-                contentDescription = "Thumbnail")
+                painter = painterResource(id = MimetypeIconUtil.getFileTypeIconId(MimetypeIconUtil.getBestMimeTypeByFilename(transfer.localPath), fileName)),
+                contentDescription = "Thumbnail"
+            )
         }
         Column (
             modifier = Modifier
@@ -107,7 +175,7 @@ fun TransferItem(modifier: Modifier = Modifier){
                 maxLines = 1,
                 color = colorResource(id = R.color.textColor),
                 fontSize = 16.sp,
-                text = stringResource(id = R.string.placeholder_filename)
+                text = fileName
             )
             Row (modifier = modifier){
                 Text(
@@ -117,38 +185,60 @@ fun TransferItem(modifier: Modifier = Modifier){
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1,
                     fontSize = 12.sp,
-                    text = stringResource(id = R.string.placeholder_filesize)
+                    text = DisplayUtils.bytesToHumanReadable(transfer.fileSize, LocalContext.current)
                 )
-                Text (
-                    modifier = Modifier
-                        .layoutId("upload_date"),
-                    color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
-                    fontSize = 12.sp,
-                    text = stringResource(id = R.string.placeholder_timestamp)
-                )
-                Text(
-                    modifier = Modifier
-                        .layoutId("upload_status"),
-                    color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
-                    fontSize = 12.sp,
-                    text = stringResource(id = R.string.uploads_view_upload_status_succeeded)
+                if (transfer.transferEndTimestamp != null && transfer.status != TransferStatus.TRANSFER_FAILED){
+                    transfer.transferEndTimestamp?.let {
+                        val dateString = DisplayUtils.getRelativeDateTimeString(
+                            LocalContext.current,
+                            it,
+                            DateUtils.SECOND_IN_MILLIS,
+                            DateUtils.WEEK_IN_MILLIS,
+                            0
+                        )
+                        Text (
+                            modifier = Modifier
+                                .layoutId("upload_date"),
+                            color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
+                            fontSize = 12.sp,
+                            text = ", $dateString"
+                        )
+                    }
+                }
+                if (transfer.status != TransferStatus.TRANSFER_SUCCEEDED){
+                    Text(
+                        modifier = Modifier
+                            .layoutId("upload_status"),
+                        color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
+                        fontSize = 12.sp,
+                        text = " — " + LocalContext.current.getString(transfer.statusToStringRes())
 
+                    )
+                }
+            }
+
+            if (transfer.status == TransferStatus.TRANSFER_IN_PROGRESS){
+                // TODO: Modificar el progreso según el valor del worker
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .layoutId("upload_progress_bar")
+                        .fillMaxWidth(),
+                    color = colorResource(id = R.color.color_accent),
+                    backgroundColor = colorResource(id = R.color.half_black)
                 )
             }
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .layoutId("upload_progress_bar")
-                    .fillMaxWidth()
-            )
+
             Text(
                 modifier = Modifier
                     .layoutId("upload_account"),
                 color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
                 maxLines = 1,
                 fontSize = 12.sp,
-                text = stringResource(id = R.string.auth_username)
+                text = checkAccount(LocalContext.current,transfer)
             )
-            SpacePathLine()
+            if (space != null){
+                SpacePathLine(space = space, remoteFile = remoteFile)
+            }
         }
         Box(
             modifier = Modifier
@@ -158,21 +248,61 @@ fun TransferItem(modifier: Modifier = Modifier){
             contentAlignment = Alignment.Center
         )
         {
-            IconButton(onClick = { /*TODO*/ }) {
-                Icon(
-                    modifier = Modifier
-                        .width(35.dp)
-                        .height(35.dp),
-                    painter = painterResource(id = R.drawable.ic_lock),
-                    contentDescription = "Button"
-                )
+            if(transfer.status != TransferStatus.TRANSFER_SUCCEEDED){
+                val imageResource: Int = when (transfer.status){
+                    TransferStatus.TRANSFER_IN_PROGRESS, TransferStatus.TRANSFER_QUEUED -> {
+                        R.drawable.ic_action_cancel_grey
+                    }
+                    TransferStatus.TRANSFER_FAILED -> {
+                        R.drawable.ic_action_delete_grey
+                    }
+                    else -> {
+                        R.drawable.ic_action_delete_grey
+                    }
+                }
+                IconButton(onClick = { transfersViewModel.cancelUpload(transfer) }) {
+                    Icon(
+                        modifier = Modifier
+                            .width(25.dp)
+                            .height(25.dp),
+                        painter = painterResource(id = imageResource),
+                        tint = colorResource(id = R.color.half_black),
+                        contentDescription = "Button"
+                    )
+                }
             }
         }
     }
+    Divider(
+        modifier = Modifier
+            .fillMaxWidth(),
+        color = colorResource(id = R.color.filelist_icon_background),
+        thickness = 1.dp
+    )
 }
 
 @Composable
-fun SpacePathLine (modifier: Modifier = Modifier){
+fun SpacePathLine (modifier: Modifier = Modifier, space: OCSpace, remoteFile: File){
+    val spaceName: String
+    val spaceImage: Int
+    var path = "path/to/file"
+
+    if (space.isPersonal){
+        spaceName = "Personal"
+        spaceImage = R.drawable.ic_folder
+    } else {
+        spaceName = space.name
+        spaceImage = R.drawable.ic_spaces
+    }
+
+    remoteFile.parent?.let {
+        path = if (it.endsWith("${OCFile.PATH_SEPARATOR}")){
+            it
+        } else {
+            "$it${OCFile.PATH_SEPARATOR}"
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth(),
@@ -184,7 +314,7 @@ fun SpacePathLine (modifier: Modifier = Modifier){
                 .width(15.dp)
                 .height(15.dp)
                 .padding(end = 2.dp),
-            painter = painterResource(id = R.drawable.ic_spaces),
+            painter = painterResource(id = spaceImage),
             tint = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
             contentDescription = "Space Icon")
         Text(
@@ -196,7 +326,7 @@ fun SpacePathLine (modifier: Modifier = Modifier){
             overflow = TextOverflow.Ellipsis,
             maxLines = 1,
             fontSize = 12.sp,
-            text = "Space name"
+            text = spaceName
         )
         Text(
             modifier = Modifier
@@ -204,7 +334,8 @@ fun SpacePathLine (modifier: Modifier = Modifier){
             color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
             overflow = TextOverflow.Ellipsis,
             maxLines = 1,
-            text = "/path/to/file"
+            fontSize = 12.sp,
+            text = path
         )
     }
 }
@@ -239,7 +370,7 @@ fun EmptyList(modifier: Modifier = Modifier){
         )  
         Text(
             modifier = Modifier
-                .layoutId("list_empty_dataset_sub_titlte")
+                .layoutId("list_empty_dataset_sub_title")
                 .padding(start = 8.dp, end = 8.dp),
             color = colorResource(id = R.color.grey),
             fontFamily = FontFamily.SansSerif,
@@ -253,7 +384,12 @@ fun EmptyList(modifier: Modifier = Modifier){
 }
 
 @Composable
-fun UploadGroup (modifier: Modifier = Modifier) {
+fun UploadGroup (modifier: Modifier = Modifier, status: TransferStatus, count: Int, transfersViewModel: TransfersViewModel) {
+    val stringResFileCount =
+        if (count == 1) R.string.uploads_view_group_file_count_single else R.string.uploads_view_group_file_count
+    val fileCountText: String = String.format(LocalContext.current.getString(stringResFileCount), count)
+
+    // TODO Añadir todos los onClick de los botones
     Column{
         Row(
             modifier = Modifier
@@ -267,7 +403,7 @@ fun UploadGroup (modifier: Modifier = Modifier) {
                 overflow = TextOverflow.Ellipsis,
                 fontWeight = FontWeight.Bold,
                 color = colorResource(id = R.color.color_accent),
-                text = "UPLOADED"
+                text = LocalContext.current.getString(headerTitleStringRes(status)).uppercase()
             )
             Spacer (modifier = Modifier.weight(1f))
             Text(
@@ -276,45 +412,112 @@ fun UploadGroup (modifier: Modifier = Modifier) {
                     .padding(end = 16.dp),
                 fontWeight = FontWeight.Bold,
                 color = colorResource(id = R.color.half_black),
-                text = "5 FILES"
+                text = fileCountText.uppercase()
             )
         }
         Divider(
             modifier = Modifier
                 .fillMaxWidth(),
-            color = colorResource(id = R.color.grey)
+            color = colorResource(id = R.color.filelist_icon_background),
+            thickness = 2.dp
         )
         Row {
-            Button(
-                modifier = Modifier
-                    .layoutId("uploadListGroupButtonClear")
-                    .padding(start = 13.dp),
-                onClick = {},
-                shape = RoundedCornerShape(1.dp),
-                colors = ButtonDefaults.buttonColors(backgroundColor = colorResource(id = R.color.color_accent))
-            ) {
-                Text(
-                    text = stringResource(id = R.string.action_upload_clear).toUpperCase(),
-                    color = colorResource(id = R.color.white),
-                )
+            if (status == TransferStatus.TRANSFER_FAILED || status == TransferStatus.TRANSFER_SUCCEEDED){
+                Button(
+                    modifier = Modifier
+                        .layoutId("uploadListGroupButtonClear")
+                        .padding(start = 13.dp),
+                    onClick = {
+                        if (status == TransferStatus.TRANSFER_FAILED) {
+                            transfersViewModel.clearFailedTransfers()
+                        } else {
+                            transfersViewModel.clearSuccessfulTransfers()
+                        }
+                    },
+                    shape = RoundedCornerShape(1.dp),
+                    colors = ButtonDefaults.buttonColors(backgroundColor = colorResource(id = R.color.color_accent))
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.action_upload_clear).uppercase(),
+                        color = colorResource(id = R.color.white),
+                    )
+                }
             }
-            Button(
-                modifier = Modifier
-                    .layoutId("uploadListGroupButtonRetry")
-                    .padding(start = 8.dp),
-                onClick = {},
-                shape = RoundedCornerShape(1.dp),
-                colors = ButtonDefaults.buttonColors(backgroundColor = colorResource(id = R.color.color_accent))
-            ) {
-                Text(
-                    text = stringResource(id = R.string.action_upload_retry).toUpperCase(),
-                    color = colorResource(id = R.color.white),
-                )
+            if(status == TransferStatus.TRANSFER_FAILED){
+                Button(
+                    modifier = Modifier
+                        .layoutId("uploadListGroupButtonRetry")
+                        .padding(start = 8.dp),
+                    onClick = { transfersViewModel.retryFailedTransfers() },
+                    shape = RoundedCornerShape(1.dp),
+                    colors = ButtonDefaults.buttonColors(backgroundColor = colorResource(id = R.color.color_accent))
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.action_upload_retry).uppercase(),
+                        color = colorResource(id = R.color.white),
+                    )
+                }
+            }
+        }
+    }
+    if (status == TransferStatus.TRANSFER_SUCCEEDED || status == TransferStatus.TRANSFER_FAILED)
+    Divider(
+        modifier = Modifier
+            .fillMaxWidth(),
+        color = colorResource(id = R.color.filelist_icon_background),
+        thickness = 1.dp
+    )
+}
+
+fun headerTitleStringRes(status: TransferStatus): Int {
+    return when (status) {
+        TransferStatus.TRANSFER_IN_PROGRESS -> R.string.uploads_view_group_current_uploads
+        TransferStatus.TRANSFER_FAILED -> R.string.uploads_view_group_failed_uploads
+        TransferStatus.TRANSFER_SUCCEEDED -> R.string.uploads_view_group_finished_uploads
+        TransferStatus.TRANSFER_QUEUED -> R.string.uploads_view_group_queued_uploads
+    }
+}
+
+fun checkAccount (context: Context, transfer: OCTransfer): String {
+    return try {
+        val account = AccountUtils.getOwnCloudAccountByName(context, transfer.accountName)
+        val oca = OwnCloudAccount(account, context)
+        val accountName = oca.displayName + " @ " +
+                DisplayUtils.convertIdn(account.name.substring(account.name.lastIndexOf("@") + 1), false)
+        accountName
+    } catch (e: Exception){
+        Timber.w("Couldn't get display name for account, using old style")
+        transfer.accountName
+    }
+}
+
+fun retryTransfer (context: Context, transfer: OCTransfer, transfersViewModel: TransfersViewModel){
+    if (transfer.lastResult == TransferResult.CREDENTIAL_ERROR) {
+        val parentActivity = context as FileActivity
+        val account = AccountUtils.getOwnCloudAccountByName(context, transfer.accountName)
+        parentActivity.fileOperationsHelper.checkCurrentCredentials(account)
+    } else {
+        val file = File(transfer.localPath)
+        if (file.exists()) {
+            transfersViewModel.retryUploadFromSystem(transfer.id!!)
+        } else if (DocumentFile.isDocumentUri(context, Uri.parse(transfer.localPath))) {
+            transfersViewModel.retryUploadFromContentUri(transfer.id!!)
+        } else {
+            val parentActivity = context as? ComponentActivity
+            parentActivity?.findViewById<View>(android.R.id.content)?.let { view ->
+                Snackbar.make(
+                    view,
+                    context.getString(R.string.local_file_not_found_toast),
+                    Snackbar.LENGTH_LONG
+                ).show()
+            } ?: run {
+                Toast.makeText(context, context.getString(R.string.local_file_not_found_toast), Toast.LENGTH_LONG).show()
             }
         }
     }
 }
 
+/*
 @Preview
 @Composable
 fun TransferItemPreview(){
@@ -323,7 +526,9 @@ fun TransferItemPreview(){
     }
 
 }
+ */
 
+/*
 @Preview
 @Composable
 fun SpacePathLinePreview(){
@@ -331,6 +536,7 @@ fun SpacePathLinePreview(){
         SpacePathLine()
     }
 }
+ */
 
 @Preview
 @Composable
@@ -339,7 +545,7 @@ fun EmptyListPreview(){
         EmptyList()
     }
 }
-
+/*
 @Preview
 @Composable
 fun TransferListPreview(){
@@ -347,7 +553,9 @@ fun TransferListPreview(){
         TransferList()
     }
 }
+*/
 
+/*
 @Preview
 @Composable
 fun uploadGroupPreview(){
@@ -355,6 +563,8 @@ fun uploadGroupPreview(){
         UploadGroup()
     }
 }
+*/
+
 
 
 
