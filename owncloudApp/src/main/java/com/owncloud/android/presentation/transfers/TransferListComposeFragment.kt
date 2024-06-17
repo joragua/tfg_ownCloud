@@ -88,6 +88,7 @@ class TransferListComposeFragment : Fragment() {
             }
         }
     }
+
     @Composable
     fun Transfers() {
         var transfersState by remember { mutableStateOf(emptyList<Pair<OCTransfer, OCSpace?>>()) }
@@ -117,7 +118,7 @@ class TransferListComposeFragment : Fragment() {
                 transfers.sortedByDescending { it.first.transferEndTimestamp ?: it.first.id }
                     .forEach { (transfer, space) ->
                         item {
-                            TransferItem(transfer = transfer, space = space, workInfo = workInfo )
+                            TransferItem(transfer = transfer, space = space, workInfo = workInfo)
                         }
                     }
             }
@@ -141,6 +142,12 @@ class TransferListComposeFragment : Fragment() {
             }
         }
 
+        Divider(
+            modifier = Modifier
+                .fillMaxWidth(),
+            color = colorResource(id = R.color.filelist_icon_background),
+            thickness = 1.dp
+        )
         Row(
             modifier = Modifier
                 .layoutId("LisItemLayout")
@@ -231,7 +238,7 @@ class TransferListComposeFragment : Fragment() {
                             .padding(top = 8.dp, bottom = 8.dp),
                         color = colorResource(id = R.color.color_accent),
                         backgroundColor = colorResource(id = R.color.filelist_icon_background),
-                        progress =  checkProgress(transfer, workInfo) / 100f
+                        progress = checkProgress(transfer, workInfo) / 100f
                     )
                 }
 
@@ -461,13 +468,7 @@ class TransferListComposeFragment : Fragment() {
                 }
             }
         }
-        if (status == TransferStatus.TRANSFER_SUCCEEDED || status == TransferStatus.TRANSFER_FAILED)
-            Divider(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                color = colorResource(id = R.color.filelist_icon_background),
-                thickness = 1.dp
-            )
+
     }
 
     private fun headerTitleStringRes(status: TransferStatus): Int {
