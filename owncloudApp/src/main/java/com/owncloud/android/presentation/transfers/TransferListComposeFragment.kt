@@ -57,7 +57,10 @@ import kotlinx.coroutines.flow.collectLatest
 import java.io.File
 import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.collectAsState
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.asFlow
+import androidx.work.WorkInfo
 import com.google.android.material.snackbar.Snackbar
 import com.owncloud.android.domain.transfers.model.TransferResult
 import com.owncloud.android.extensions.showMessageInSnackbar
@@ -66,6 +69,7 @@ import com.owncloud.android.lib.common.OwnCloudAccount
 import com.owncloud.android.presentation.authentication.AccountUtils
 import com.owncloud.android.ui.activity.FileActivity
 import com.owncloud.android.utils.MimetypeIconUtil
+import com.owncloud.android.workers.DownloadFileWorker
 import timber.log.Timber
 
 class TransferListComposeFragment : Fragment() {
@@ -87,6 +91,7 @@ class TransferListComposeFragment : Fragment() {
     @Composable
     fun Transfers() {
         var transfersState by remember { mutableStateOf(emptyList<Pair<OCTransfer, OCSpace?>>()) }
+        val workInfos by transfersViewModel.workInfosListLiveData.asFlow().collectAsState(initial = emptyList())
 
         LaunchedEffect(transfersViewModel) {
             transfersViewModel.transfersWithSpaceStateFlow.collectLatest { transfers ->
@@ -97,12 +102,12 @@ class TransferListComposeFragment : Fragment() {
         if (transfersState.isEmpty()) {
             EmptyList()
         } else {
-            TransferList(transfersWithSpace = transfersState)
+            TransferList(transfersWithSpace = transfersState, workInfo = workInfos)
         }
     }
 
     @Composable
-    fun TransferList(transfersWithSpace: List<Pair<OCTransfer, OCSpace?>>) {
+    fun TransferList(transfersWithSpace: List<Pair<OCTransfer, OCSpace?>>, workInfo: List<WorkInfo>) {
         val transfersGroupedByStatus = transfersWithSpace.groupBy { it.first.status }
         LazyColumn {
             transfersGroupedByStatus.forEach { (status, transfers) ->
@@ -112,7 +117,7 @@ class TransferListComposeFragment : Fragment() {
                 transfers.sortedByDescending { it.first.transferEndTimestamp ?: it.first.id }
                     .forEach { (transfer, space) ->
                         item {
-                            TransferItem(transfer = transfer, space = space)
+                            TransferItem(transfer = transfer, space = space, workInfo = workInfo )
                         }
                     }
             }
@@ -120,7 +125,7 @@ class TransferListComposeFragment : Fragment() {
     }
 
     @Composable
-    fun TransferItem(transfer: OCTransfer, space: OCSpace?) {
+    fun TransferItem(transfer: OCTransfer, space: OCSpace?, workInfo: List<WorkInfo>) {
         val remoteFile = File(transfer.remotePath)
         var fileName = remoteFile.name
         if (fileName.isEmpty()) {
@@ -141,7 +146,7 @@ class TransferListComposeFragment : Fragment() {
                 .layoutId("LisItemLayout")
                 .fillMaxWidth()
                 .padding(top = 8.dp, bottom = 8.dp)
-                .clickable(enabled = transfer.status == TransferStatus.TRANSFER_FAILED) { retryUpload (transfer) },
+                .clickable(enabled = transfer.status == TransferStatus.TRANSFER_FAILED) { retryUpload(transfer) },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -219,13 +224,13 @@ class TransferListComposeFragment : Fragment() {
                 }
 
                 if (transfer.status == TransferStatus.TRANSFER_IN_PROGRESS) {
-                    // TODO: Modificar el progreso según el valor del worker
                     LinearProgressIndicator(
                         modifier = Modifier
                             .layoutId("upload_progress_bar")
                             .fillMaxWidth(),
                         color = colorResource(id = R.color.color_accent),
                         backgroundColor = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
+                        progress =  checkProgress(transfer, workInfo) / 100f
                     )
                 }
 
@@ -501,6 +506,15 @@ class TransferListComposeFragment : Fragment() {
                 showMessageInSnackbar(getString(R.string.local_file_not_found_toast))
             }
         }
+    }
+
+    private fun checkProgress(transfer: OCTransfer, workInfo: List<WorkInfo>): Int {
+        workInfo.forEach { workInfo ->
+            if (workInfo.tags.contains(transfer.id.toString())) {
+                return workInfo.progress.getInt(DownloadFileWorker.WORKER_KEY_PROGRESS, -1)
+            }
+        }
+        return 0
     }
 }
 
