@@ -227,9 +227,10 @@ class TransferListComposeFragment : Fragment() {
                     LinearProgressIndicator(
                         modifier = Modifier
                             .layoutId("upload_progress_bar")
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 8.dp),
                         color = colorResource(id = R.color.color_accent),
-                        backgroundColor = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
+                        backgroundColor = colorResource(id = R.color.filelist_icon_background),
                         progress =  checkProgress(transfer, workInfo) / 100f
                     )
                 }
