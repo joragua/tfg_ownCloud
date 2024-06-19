@@ -142,12 +142,6 @@ class TransferListComposeFragment : Fragment() {
             }
         }
 
-        Divider(
-            modifier = Modifier
-                .fillMaxWidth(),
-            color = colorResource(id = R.color.filelist_icon_background),
-            thickness = 1.dp
-        )
         Row(
             modifier = Modifier
                 .layoutId("LisItemLayout")
@@ -466,7 +460,16 @@ class TransferListComposeFragment : Fragment() {
                         )
                     }
                 }
+
             }
+        }
+        if (status == TransferStatus.TRANSFER_SUCCEEDED || status == TransferStatus.TRANSFER_FAILED){
+            Divider(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                color = colorResource(id = R.color.filelist_icon_background),
+                thickness = 1.dp
+            )
         }
 
     }
