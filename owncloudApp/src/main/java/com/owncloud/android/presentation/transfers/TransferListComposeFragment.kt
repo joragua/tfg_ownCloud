@@ -1,12 +1,13 @@
 package com.owncloud.android.presentation.transfers
 
-import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.text.format.DateUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,32 +47,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.asFlow
+import androidx.work.WorkInfo
 import com.owncloud.android.R
 import com.owncloud.android.domain.files.model.OCFile
 import com.owncloud.android.domain.spaces.model.OCSpace
 import com.owncloud.android.domain.transfers.model.OCTransfer
-import com.owncloud.android.domain.transfers.model.TransferStatus
-import com.owncloud.android.utils.DisplayUtils
-import org.koin.androidx.viewmodel.ext.android.viewModel
-import kotlinx.coroutines.flow.collectLatest
-import java.io.File
-import android.text.format.DateUtils
-import androidx.compose.foundation.clickable
-import androidx.compose.runtime.collectAsState
-import androidx.documentfile.provider.DocumentFile
-import androidx.lifecycle.asFlow
-import androidx.work.WorkInfo
-import com.google.android.material.snackbar.Snackbar
 import com.owncloud.android.domain.transfers.model.TransferResult
+import com.owncloud.android.domain.transfers.model.TransferStatus
 import com.owncloud.android.extensions.showMessageInSnackbar
 import com.owncloud.android.extensions.statusToStringRes
 import com.owncloud.android.lib.common.OwnCloudAccount
 import com.owncloud.android.presentation.authentication.AccountUtils
 import com.owncloud.android.ui.activity.FileActivity
+import com.owncloud.android.utils.DisplayUtils
 import com.owncloud.android.utils.MimetypeIconUtil
 import com.owncloud.android.workers.DownloadFileWorker
+import kotlinx.coroutines.flow.collectLatest
+import org.koin.androidx.viewmodel.ext.android.viewModel
 import timber.log.Timber
+import java.io.File
 
 class TransferListComposeFragment : Fragment() {
 

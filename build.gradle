@@ -5,7 +5,6 @@ buildscript {
         sdkMinVersion = 24
         sdkTargetVersion = 34
         compose_version = "1.6.7"
-        kotlinVersion = "1.9.24"
     }
 
     repositories {
