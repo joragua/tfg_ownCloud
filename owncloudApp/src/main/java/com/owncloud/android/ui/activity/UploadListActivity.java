@@ -39,6 +39,7 @@ import com.owncloud.android.lib.common.operations.RemoteOperation;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
 import com.owncloud.android.operations.CheckCurrentCredentialsOperation;
 import com.owncloud.android.presentation.authentication.AccountUtils;
+import com.owncloud.android.presentation.transfers.TransferListComposeFragment;
 import com.owncloud.android.presentation.transfers.TransferListFragment;
 import com.owncloud.android.presentation.transfers.TransfersViewModel;
 import com.owncloud.android.utils.MimetypeIconUtil;
@@ -91,7 +92,9 @@ public class UploadListActivity extends FileActivity {
 
     private void createUploadListFragment() {
         //UploadListFragment uploadList = new UploadListFragment();
-        TransferListFragment uploadList = new TransferListFragment();
+
+        TransferListComposeFragment uploadList = new TransferListComposeFragment();
+        //TransferListFragment uploadList = new TransferListFragment();
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
         transaction.add(R.id.left_fragment_container, uploadList, TAG_UPLOAD_LIST_FRAGMENT);
         transaction.commit();

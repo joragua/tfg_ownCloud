@@ -836,4 +836,9 @@
     <string name="content_description_delete_share">Delete share</string>
     <string name="content_description_file_operations">%1$s operations</string>
 
+    <string name="content_description_space_icon">Space icon</string>
+    <string name="content_description_empty_dataset_icon">Empty dataset icon</string>
+    <string name="content_description_thumbnail">Thumbnail</string>
+    <string name="content_description_cancel_delete_button">Cancel or delete button</string>
+
 </resources>
