@@ -35,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.colorResource
@@ -78,7 +77,7 @@ class TransferListComposeFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         return ComposeView(requireContext()).apply {
             setContent {
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
@@ -131,7 +130,7 @@ class TransferListComposeFragment : Fragment() {
             fileName = File.separator
         }
 
-        var path = "path/to/file"
+        var path = ""
         remoteFile.parent?.let {
             path = if (it.endsWith("${OCFile.PATH_SEPARATOR}")) {
                 it
@@ -142,7 +141,6 @@ class TransferListComposeFragment : Fragment() {
 
         Row(
             modifier = Modifier
-                .layoutId("LisItemLayout")
                 .fillMaxWidth()
                 .padding(top = 8.dp, bottom = 8.dp)
                 .clickable(enabled = transfer.status == TransferStatus.TRANSFER_FAILED) { retryUpload(transfer) },
@@ -156,7 +154,6 @@ class TransferListComposeFragment : Fragment() {
             ) {
                 Image(
                     modifier = Modifier
-                        .layoutId("Thumbnail")
                         .width(32.dp)
                         .height(32.dp),
                     painter = painterResource(
@@ -165,7 +162,7 @@ class TransferListComposeFragment : Fragment() {
                             fileName
                         )
                     ),
-                    contentDescription = "Thumbnail"
+                    contentDescription = stringResource(id = R.string.content_description_thumbnail)
                 )
             }
             Column(
@@ -174,8 +171,6 @@ class TransferListComposeFragment : Fragment() {
                     .weight(1f)
             ) {
                 Text(
-                    modifier = Modifier
-                        .layoutId("upload_name"),
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1,
                     color = colorResource(id = R.color.textColor),
@@ -184,15 +179,13 @@ class TransferListComposeFragment : Fragment() {
                 )
                 Row {
                     Text(
-                        modifier = Modifier
-                            .layoutId("upload_file_size"),
                         color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
                         overflow = TextOverflow.Ellipsis,
                         maxLines = 1,
                         fontSize = 12.sp,
                         text = DisplayUtils.bytesToHumanReadable(transfer.fileSize, requireContext())
                     )
-                    if (transfer.transferEndTimestamp != null && transfer.status != TransferStatus.TRANSFER_FAILED) {
+                    if (transfer.status != TransferStatus.TRANSFER_FAILED) {
                         transfer.transferEndTimestamp?.let {
                             val dateString = DisplayUtils.getRelativeDateTimeString(
                                 requireContext(),
@@ -202,8 +195,6 @@ class TransferListComposeFragment : Fragment() {
                                 0
                             )
                             Text(
-                                modifier = Modifier
-                                    .layoutId("upload_date"),
                                 color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
                                 fontSize = 12.sp,
                                 text = ", $dateString"
@@ -212,8 +203,6 @@ class TransferListComposeFragment : Fragment() {
                     }
                     if (transfer.status != TransferStatus.TRANSFER_SUCCEEDED) {
                         Text(
-                            modifier = Modifier
-                                .layoutId("upload_status"),
                             color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
                             fontSize = 12.sp,
                             text = " — " + requireContext().getString(transfer.statusToStringRes())
@@ -225,7 +214,6 @@ class TransferListComposeFragment : Fragment() {
                 if (transfer.status == TransferStatus.TRANSFER_IN_PROGRESS) {
                     LinearProgressIndicator(
                         modifier = Modifier
-                            .layoutId("upload_progress_bar")
                             .fillMaxWidth()
                             .padding(top = 8.dp, bottom = 8.dp),
                         color = colorResource(id = R.color.color_accent),
@@ -235,8 +223,6 @@ class TransferListComposeFragment : Fragment() {
                 }
 
                 Text(
-                    modifier = Modifier
-                        .layoutId("upload_account"),
                     color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
                     maxLines = 1,
                     fontSize = 12.sp,
@@ -275,7 +261,7 @@ class TransferListComposeFragment : Fragment() {
                                 .height(25.dp),
                             painter = painterResource(id = imageResource),
                             tint = colorResource(id = R.color.half_black),
-                            contentDescription = "Button"
+                            contentDescription = stringResource(id = R.string.content_description_cancel_delete_button)
                         )
                     }
                 }
@@ -295,7 +281,7 @@ class TransferListComposeFragment : Fragment() {
         val spaceImage: Int
 
         if (space.isPersonal) {
-            spaceName = "Personal"
+            spaceName = stringResource(id = R.string.bottom_nav_personal)
             spaceImage = R.drawable.ic_folder
         } else {
             spaceName = space.name
@@ -310,17 +296,15 @@ class TransferListComposeFragment : Fragment() {
         ) {
             Icon(
                 modifier = Modifier
-                    .layoutId("space_icon")
                     .width(15.dp)
                     .height(15.dp)
                     .padding(end = 2.dp),
                 painter = painterResource(id = spaceImage),
                 tint = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
-                contentDescription = "Space Icon"
+                contentDescription = stringResource(id = R.string.content_description_space_icon)
             )
             Text(
                 modifier = Modifier
-                    .layoutId("space_name")
                     .padding(end = 8.dp),
                 color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
                 fontWeight = FontWeight.Bold,
@@ -330,8 +314,6 @@ class TransferListComposeFragment : Fragment() {
                 text = spaceName
             )
             Text(
-                modifier = Modifier
-                    .layoutId("path"),
                 color = colorResource(id = R.color.list_item_lastmod_and_filesize_text),
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 1,
@@ -351,12 +333,11 @@ class TransferListComposeFragment : Fragment() {
         ) {
             Icon(
                 modifier = Modifier
-                    .layoutId("list_empty_dataset_icon")
                     .width(72.dp)
                     .height(72.dp),
                 tint = colorResource(id = R.color.grey),
                 painter = painterResource(id = R.drawable.ic_uploads),
-                contentDescription = "Empty dataset Icon"
+                contentDescription = stringResource(id = R.string.content_description_empty_dataset_icon)
             )
             Text(
                 modifier = Modifier
@@ -371,7 +352,6 @@ class TransferListComposeFragment : Fragment() {
             )
             Text(
                 modifier = Modifier
-                    .layoutId("list_empty_dataset_sub_title")
                     .padding(start = 8.dp, end = 8.dp),
                 color = colorResource(id = R.color.grey),
                 fontFamily = FontFamily.SansSerif,
@@ -398,7 +378,6 @@ class TransferListComposeFragment : Fragment() {
             ) {
                 Text(
                     modifier = Modifier
-                        .layoutId("uploadListGroupName")
                         .padding(start = 16.dp),
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.Bold,
@@ -408,7 +387,6 @@ class TransferListComposeFragment : Fragment() {
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     modifier = Modifier
-                        .layoutId("textViewFileCount")
                         .padding(end = 16.dp),
                     fontWeight = FontWeight.Bold,
                     color = colorResource(id = R.color.half_black),
@@ -425,7 +403,6 @@ class TransferListComposeFragment : Fragment() {
                 if (status == TransferStatus.TRANSFER_FAILED || status == TransferStatus.TRANSFER_SUCCEEDED) {
                     Button(
                         modifier = Modifier
-                            .layoutId("uploadListGroupButtonClear")
                             .padding(start = 13.dp),
                         onClick = {
                             if (status == TransferStatus.TRANSFER_FAILED) {
@@ -446,7 +423,6 @@ class TransferListComposeFragment : Fragment() {
                 if (status == TransferStatus.TRANSFER_FAILED) {
                     Button(
                         modifier = Modifier
-                            .layoutId("uploadListGroupButtonRetry")
                             .padding(start = 8.dp),
                         onClick = { transfersViewModel.retryFailedTransfers() },
                         shape = RoundedCornerShape(1.dp),
@@ -461,7 +437,7 @@ class TransferListComposeFragment : Fragment() {
 
             }
         }
-        if (status == TransferStatus.TRANSFER_SUCCEEDED || status == TransferStatus.TRANSFER_FAILED){
+        if (status == TransferStatus.TRANSFER_FAILED || status == TransferStatus.TRANSFER_SUCCEEDED) {
             Divider(
                 modifier = Modifier
                     .fillMaxWidth(),
@@ -484,8 +460,8 @@ class TransferListComposeFragment : Fragment() {
     private fun checkAccount(transfer: OCTransfer): String {
         return try {
             val account = AccountUtils.getOwnCloudAccountByName(requireContext(), transfer.accountName)
-            val oca = OwnCloudAccount(account, requireContext())
-            val accountName = oca.displayName + " @ " +
+            val ownCloudAccount = OwnCloudAccount(account, requireContext())
+            val accountName = ownCloudAccount.displayName + " @ " +
                     DisplayUtils.convertIdn(account.name.substring(account.name.lastIndexOf("@") + 1), false)
             accountName
         } catch (e: Exception) {
@@ -520,11 +496,3 @@ class TransferListComposeFragment : Fragment() {
         return 0
     }
 }
-
-
-
-
-
-
-
-
